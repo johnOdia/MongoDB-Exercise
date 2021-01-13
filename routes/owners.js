@@ -93,15 +93,21 @@ router.get('/:ownerId/pets/new', (req, res) => {
 router.get('/:ownerId/pets/:petId', async (req,res) => {
     const { ownerId, petId } = req.params
     try {
-         const owner = await Owner.findById(ownerId)
-         .then(owner => {
-            Pet.findById(owner.pets.find(Pet._id === petId))
-         })
-         console.log(owner);
+         const owner = await Owner.findOne({_id:ownerId}).populate({
+             path: 'pets',
+             match: {_id  : petId}
+         }).exec()
+
+         res.status(200).send(owner)
          
     } catch (err) {
         res.status(400).send(err.message)
     }
+})
+
+//Display a form for editing an owners pet
+router.get('/:ownerId/pets/:petId/edit', (req,res) => {
+    res.sendFile(path.join(__dirname + '/html/editPet.html'))
 })
 
 //Create a pet for an owner when a form is submitted
@@ -123,6 +129,50 @@ router.post("/:ownerId/pets", (req, res, next) => {
         .catch(err => res.send(err.message));
 });
 
+//Edit an owners pet when a form is submitted
+router.patch("/:ownerId/pets/:petId", (req, res, next) => {
+    Pet.findByIdAndUpdate(req.params.petId, {name: req.body.name})
+        .then(pet => {
+            return res.status(200).json(pet)
+        })
+        .catch(err => res.status(400).send(err));
+});
+
+//Delete a pet 
+router.delete("/:ownerId/:petId", (req, res, next) => {
+    const { ownerId, petId } = req.params;
+
+    Owner.findByIdAndUpdate(
+        ownerId,
+        {$pull: {pets: petId}}
+    )
+    .then(() => {
+        return res.status(200).json({
+            message: "deleted"
+        })
+    })
+    .catch(err => res.send(err))
+})
+
+
+// Delete a single pet for an owner
+router.delete("/:ownerId/pets/:petId", (req, res, next) => {
+    const { ownerId, petId } = req.params;
+
+    return Pet.findByIdAndDelete(petId)
+        .then(pet => {
+            return Owner.findByIdAndUpdate(
+                ownerId,
+                {$pull: {pets: pet._id}}
+            )
+        })
+        .then(() => {
+            return res.status(200).json({
+                message: "Pet successfully deleted"
+            })
+        })
+        .catch(err => next(err))
+});
 
 
 module.exports = router
